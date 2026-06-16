@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { SplashScreen } from './src/screens/SplashScreen';
 import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { OnboardingScreen, UserProfile } from './src/screens/OnboardingScreen';
 import { MatchFeedScreen, Match } from './src/screens/MatchFeedScreen';
-import { colors } from './src/theme';
+import { MatchDetailScreen } from './src/screens/MatchDetailScreen';
 
 type AppScreen = 'splash' | 'welcome' | 'auth' | 'onboarding' | 'feed' | 'match_detail';
 
@@ -59,12 +59,15 @@ export default function App() {
         );
 
       case 'match_detail':
-        // Coming next
         return (
-          <View style={styles.placeholder}>
-            <Text style={styles.placeholderText}>{selectedMatch?.name}</Text>
-            <Text style={styles.placeholderSub}>Match detail — coming next</Text>
-          </View>
+          <MatchDetailScreen
+            match={selectedMatch!}
+            onBack={() => setScreen('feed')}
+            onCommit={(match) => {
+              // TODO: send introduction via backend
+              console.log('Introduction sent for:', match.name);
+            }}
+          />
         );
     }
   };
@@ -72,22 +75,4 @@ export default function App() {
   return <>{renderScreen()}</>;
 }
 
-const styles = StyleSheet.create({
-  placeholder: {
-    flex: 1,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  placeholderText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.black,
-    letterSpacing: -0.8,
-  },
-  placeholderSub: {
-    fontSize: 15,
-    color: colors.gray400,
-  },
-});
+const styles = StyleSheet.create({});

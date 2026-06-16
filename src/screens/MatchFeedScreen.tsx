@@ -9,12 +9,19 @@ import {
   StatusBar,
   Dimensions,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { colors, spacing, radius } from '../theme';
 import { UserProfile } from './OnboardingScreen';
 
 const { width } = Dimensions.get('window');
 
+
+const getAvatarUrl = (name: string, gender: string = 'female') => {
+  const style = gender.toLowerCase().includes('man') || gender.toLowerCase().includes('male') ? 'avataaars' : 'avataaars';
+  const seed = encodeURIComponent(name);
+  return `https://api.dicebear.com/7.x/avataaars/png?seed=${seed}&backgroundColor=f5f5f5&radius=50`;
+};
 export interface Match {
   id: string;
   name: string;
@@ -33,10 +40,70 @@ interface MatchFeedScreenProps {
   onProfilePress: () => void;
 }
 
-// Mock matches — will be replaced by real API call to FastAPI backend
-const generateMockMatches = (profile: UserProfile): Match[] => [
+// Mock match pools by gender — will be replaced by real API call to FastAPI backend
+// Each match has a "personality type" for philosophy-based filtering
+// similar = introvert/thoughtful, opposite = extrovert/spontaneous
+const MALE_MATCHES: Match[] = [
   {
-    id: '1',
+    id: 'm1',
+    name: 'Arjun',
+    age: 28,
+    area: 'Bandra West',
+    compatibilityScore: 91,
+    matchReason: 'You both treat Sundays like a religion — slow mornings, zero plans.',
+    sharedValues: ['Ambition', 'Honesty', 'Growth'],
+    ghostingRisk: 'low',
+    profession: 'Product Manager',
+  },
+  {
+    id: 'm2',
+    name: 'Rohan',
+    age: 26,
+    area: 'Powai',
+    compatibilityScore: 84,
+    matchReason: 'His idea of a good evening is exactly yours — deep conversation over chai.',
+    sharedValues: ['Curiosity', 'Honesty'],
+    ghostingRisk: 'low',
+    profession: 'Software Engineer',
+  },
+  {
+    id: 'm3',
+    name: 'Kabir',
+    age: 32,
+    area: 'Andheri',
+    compatibilityScore: 78,
+    matchReason: 'Both of you value building something meaningful over comfort.',
+    sharedValues: ['Ambition', 'Independence'],
+    ghostingRisk: 'medium',
+    profession: 'Startup Founder',
+  },
+  {
+    id: 'm4',
+    name: 'Vikram',
+    age: 30,
+    area: 'Juhu',
+    compatibilityScore: 73,
+    matchReason: 'Where you find stillness, he finds spark — the contrast could be electric.',
+    sharedValues: ['Spontaneity', 'Adventure'],
+    ghostingRisk: 'medium',
+    profession: 'Photographer',
+  },
+  {
+    id: 'm5',
+    name: 'Dev',
+    age: 24,
+    area: 'Colaba',
+    compatibilityScore: 69,
+    matchReason: 'His energy is everything yours is not — and that is exactly the point.',
+    sharedValues: ['Creativity', 'Freedom'],
+    ghostingRisk: 'high',
+    profession: 'Artist',
+  },
+];
+
+const FEMALE_MATCHES: Match[] = [
+  {
+    id: 'f1',
     name: 'Aanya',
     age: 27,
     area: 'Bandra West',
@@ -47,7 +114,7 @@ const generateMockMatches = (profile: UserProfile): Match[] => [
     profession: 'Product Designer',
   },
   {
-    id: '2',
+    id: 'f2',
     name: 'Priya',
     age: 25,
     area: 'Powai',
@@ -58,7 +125,7 @@ const generateMockMatches = (profile: UserProfile): Match[] => [
     profession: 'Data Scientist',
   },
   {
-    id: '3',
+    id: 'f3',
     name: 'Riya',
     age: 28,
     area: 'Andheri',
@@ -68,7 +135,71 @@ const generateMockMatches = (profile: UserProfile): Match[] => [
     ghostingRisk: 'medium',
     profession: 'Startup Founder',
   },
+  {
+    id: 'f4',
+    name: 'Zara',
+    age: 31,
+    area: 'Juhu',
+    compatibilityScore: 72,
+    matchReason: 'Where you find stillness, she finds spark — the contrast could be electric.',
+    sharedValues: ['Spontaneity', 'Adventure'],
+    ghostingRisk: 'medium',
+    profession: 'Travel Blogger',
+  },
+  {
+    id: 'f5',
+    name: 'Meera',
+    age: 23,
+    area: 'Dadar',
+    compatibilityScore: 67,
+    matchReason: 'Her world is everything yours is not — and that is exactly the point.',
+    sharedValues: ['Creativity', 'Freedom'],
+    ghostingRisk: 'low',
+    profession: 'Dancer',
+  },
 ];
+
+const generateMockMatches = (profile: UserProfile): Match[] => {
+  const orientation = (profile.orientation || '').toLowerCase();
+  const minAge = parseInt(profile.ageRangeMin || '18', 10);
+  const maxAge = parseInt(profile.ageRangeMax || '99', 10);
+  const philosophy = profile.matchPhilosophy || 'similar';
+
+  // 1. Pick pool by orientation
+  const openToBoth =
+    orientation.includes('both') ||
+    orientation.includes('open') ||
+    orientation.includes('either') ||
+    orientation.includes('all') ||
+    orientation.includes('any');
+
+  const wantsWomen =
+    orientation.includes('women') ||
+    orientation.includes('female') ||
+    orientation.includes('woman') ||
+    orientation.includes('girl') ||
+    orientation.includes('lesbian');
+
+  let pool: Match[] = openToBoth
+    ? [...FEMALE_MATCHES, ...MALE_MATCHES]
+    : wantsWomen
+    ? FEMALE_MATCHES
+    : MALE_MATCHES;
+
+  // 2. Filter by age range
+  pool = pool.filter(m => m.age >= minAge && m.age <= maxAge);
+
+  // 3. Apply philosophy — opposites get lower-scoring (contrasting) profiles first
+  if (philosophy === 'opposites') {
+    // Reverse score order — surface the contrasting profiles
+    pool = pool.sort((a, b) => a.compatibilityScore - b.compatibilityScore);
+    // Relabel match reasons to frame contrast positively (already done in data)
+  } else {
+    pool = pool.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+  }
+
+  return pool;
+};
 
 export const MatchFeedScreen: React.FC<MatchFeedScreenProps> = ({
   userProfile,
@@ -113,6 +244,13 @@ export const MatchFeedScreen: React.FC<MatchFeedScreenProps> = ({
           <Text style={styles.subGreeting}>
             {matches.length} introduction{matches.length !== 1 ? 's' : ''} waiting for you.
           </Text>
+          {userProfile.matchPhilosophy ? (
+            <View style={styles.philosophyBadge}>
+              <Text style={styles.philosophyBadgeText}>
+                {userProfile.matchPhilosophy === 'opposites' ? '⚡ Opposites attract' : '✦ Similar minds'}
+              </Text>
+            </View>
+          ) : null}
         </View>
         <TouchableOpacity onPress={onProfilePress} activeOpacity={0.7} style={styles.avatarBtn}>
           <View style={styles.avatar}>
@@ -197,9 +335,10 @@ const MatchCard: React.FC<{
       >
         {/* Top row */}
         <View style={styles.cardTop}>
-          <View style={styles.cardInitialBlock}>
-            <Text style={styles.cardInitial}>{match.name[0]}</Text>
-          </View>
+          <Image
+            source={{ uri: getAvatarUrl(match.name) }}
+            style={styles.cardAvatar}
+          />
           <View style={styles.cardTopInfo}>
             <View style={styles.cardNameRow}>
               <Text style={styles.cardName}>{match.name}</Text>
@@ -361,18 +500,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-  cardInitialBlock: {
+  cardAvatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
     backgroundColor: colors.offWhite,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardInitial: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.black,
   },
   cardTopInfo: {
     flex: 1,
@@ -480,6 +612,21 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     color: colors.gray400,
+    letterSpacing: 0.2,
+  },
+  philosophyBadge: {
+    marginTop: spacing.xs,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 2,
+  },
+  philosophyBadgeText: {
+    fontSize: 11,
+    color: colors.gray600,
+    fontWeight: '500',
     letterSpacing: 0.2,
   },
   bottomNote: {

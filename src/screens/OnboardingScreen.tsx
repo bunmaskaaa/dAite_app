@@ -31,6 +31,11 @@ interface OnboardingScreenProps {
 export interface UserProfile {
   name: string;
   age: string;
+  gender: string;
+  orientation: string;
+  ageRangeMin: string;
+  ageRangeMax: string;
+  matchPhilosophy: 'opposites' | 'similar' | '';
   responses: { question: string; answer: string }[];
 }
 
@@ -41,18 +46,22 @@ You are conducting a structured onboarding conversation to build their profile. 
 
 1. Ask for their first name warmly.
 2. Ask their age.
-3. Ask what they're looking for — be specific: long-term relationship, something serious but open, not sure yet.
-4. Ask one question about their personality — something revealing, not "describe yourself". Example: "What does a perfect Sunday look like for you?"
-5. Ask what they genuinely value in a partner — not looks, but character. Push for specifics.
-6. Ask one dealbreaker question — what's a non-negotiable for them.
-7. Give a brief, warm closing summary of who they are based on what they shared, and tell them dAite will now find their best matches.
+3. Ask their gender — keep it open and relaxed. Example: "How do you identify — man, woman, or something else?"
+4. Ask who they want to meet — men, women, or open to both. Keep it casual and non-judgmental.
+5. Ask what age range they're open to. Example: "What age range are you open to? Like 24 to 32, or something wider?"
+6. Ask which philosophy they believe in — keep it fun and light. Example: "Quick one — do you believe opposites attract, or that similar people make better matches?"
+7. Ask what they're looking for — long-term relationship, something serious but open, not sure yet.
+8. Ask one revealing personality question. Example: "What does a perfect Sunday look like for you?"
+9. Ask what they genuinely value in a partner — character, not looks. Push for specifics.
+10. Ask one dealbreaker — what's a non-negotiable.
+11. Give a brief warm closing summary referencing their philosophy choice, and tell them dAite will now find their best matches.
 
 Rules:
 - Ask ONE question at a time. Never bundle multiple questions.
 - Keep responses short — 1-3 sentences max.
 - Be conversational, warm, and occasionally witty. Not corporate.
 - Never use bullet points or numbered lists.
-- When you have all 6 pieces of information, end with: [PROFILE_COMPLETE] on a new line, followed by a JSON object with keys: name, age, looking_for, personality_snapshot, partner_values, dealbreaker.
+- When you have all 10 pieces of information, end with: [PROFILE_COMPLETE] on a new line, followed by a JSON object with keys: name, age, gender, orientation, age_range_min, age_range_max, match_philosophy (value must be exactly "opposites" or "similar"), looking_for, personality_snapshot, partner_values, dealbreaker.
 - Do not mention AI, Claude, or Anthropic.`;
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
@@ -201,6 +210,11 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
               onComplete({
                 name: profileData.name || '',
                 age: profileData.age || '',
+                gender: profileData.gender || '',
+                orientation: profileData.orientation || '',
+                ageRangeMin: profileData.age_range_min || '18',
+                ageRangeMax: profileData.age_range_max || '40',
+                matchPhilosophy: profileData.match_philosophy === 'opposites' ? 'opposites' : 'similar',
                 responses: [
                   { question: 'Looking for', answer: profileData.looking_for || '' },
                   { question: 'Personality', answer: profileData.personality_snapshot || '' },
@@ -211,7 +225,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
             }, 2000);
           }
         } catch {
-          setTimeout(() => onComplete({ name: '', age: '', responses: [] }), 2000);
+          setTimeout(() => onComplete({ name: '', age: '', gender: '', orientation: '', ageRangeMin: '18', ageRangeMax: '40', matchPhilosophy: '', responses: [] }), 2000);
         }
       } else {
         addAgentMessage(agentText);
