@@ -13,26 +13,26 @@ import {
 import { colors, spacing, radius } from '../theme';
 import { signInWithOTP, verifyOTP } from '../lib/supabase';
 import { Button } from '../components/Button';
-
+ 
 type AuthStep = 'email' | 'otp';
-
+ 
 interface AuthScreenProps {
   onAuthenticated: () => void;
   onBack: () => void;
 }
-
+ 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack }) => {
   const [step, setStep] = useState<AuthStep>('email');
   const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState(['', '', '', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
+ 
   const otpRefs = useRef<(TextInput | null)[]>([]);
   const slideAnim = useRef(new Animated.Value(0)).current;
-
+ 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-
+ 
   const handleSendOTP = async () => {
     if (!isValidEmail(email)) {
       setError('Enter a valid email address');
@@ -40,16 +40,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack 
     }
     setError('');
     setLoading(true);
-
+ 
     const { error } = await signInWithOTP(email);
     setLoading(false);
-
+ 
     if (error) {
       setError('Could not send code. Try again.');
       return;
     }
-
-    // Animate to OTP step
+ 
     Animated.timing(slideAnim, {
       toValue: -1,
       duration: 300,
@@ -64,64 +63,62 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack 
       }).start();
     });
   };
-
+ 
   const handleOTPChange = (value: string, index: number) => {
     if (value.length > 1) return;
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
     setError('');
-
-    if (value && index < 5) {
+ 
+    if (value && index < 7) {
       otpRefs.current[index + 1]?.focus();
     }
-
-    // Auto-verify when all 6 digits filled
+ 
     if (newOtp.every(d => d !== '') && value !== '') {
       handleVerifyOTP(newOtp.join(''));
     }
   };
-
+ 
   const handleOTPKeyPress = (key: string, index: number) => {
     if (key === 'Backspace' && !otp[index] && index > 0) {
       otpRefs.current[index - 1]?.focus();
     }
   };
-
+ 
   const handleVerifyOTP = async (code: string) => {
     setLoading(true);
     setError('');
-
+ 
     const { data, error } = await verifyOTP(email, code);
     setLoading(false);
-
+ 
     if (error || !data?.user) {
       setError('Incorrect code. Try again.');
       setOtp(['', '', '', '', '', '']);
       otpRefs.current[0]?.focus();
       return;
     }
-
+ 
     onAuthenticated();
   };
-
+ 
   const translateX = slideAnim.interpolate({
     inputRange: [-1, 0, 1],
     outputRange: [-40, 0, 40],
   });
-
+ 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
-
-      {/* Back button */}
+ 
       <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.6}>
         <Text style={styles.backText}>←</Text>
       </TouchableOpacity>
-
+ 
       <Animated.View
         style={[styles.content, { opacity: 1, transform: [{ translateX }] }]}
       >
@@ -130,9 +127,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack 
             <Text style={styles.eyebrow}>Step 1 of 2</Text>
             <Text style={styles.heading}>What's your email?</Text>
             <Text style={styles.subtext}>
-              We'll send a code to verify it's you. No passwords, ever.
+              We'll send a 6-digit code to verify it's you. No passwords, ever.
             </Text>
-
+ 
             <View style={styles.inputWrapper}>
               <TextInput
                 style={[styles.input, error ? styles.inputError : null]}
@@ -148,9 +145,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack 
                 onSubmitEditing={handleSendOTP}
               />
             </View>
-
+ 
             {error ? <Text style={styles.error}>{error}</Text> : null}
-
+ 
             <Button
               label="Send code"
               onPress={handleSendOTP}
@@ -164,32 +161,44 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack 
             <Text style={styles.eyebrow}>Step 2 of 2</Text>
             <Text style={styles.heading}>Check your inbox</Text>
             <Text style={styles.subtext}>
-              We sent a sign-in link to{'\n'}
+              We sent a 6-digit code to{'\n'}
               <Text style={styles.emailHighlight}>{email}</Text>
             </Text>
-
-            <View style={styles.magicLinkCard}>
-              <Text style={styles.magicLinkIcon}>✉️</Text>
-              <Text style={styles.magicLinkText}>
-                Open the email and tap{'\n'}<Text style={styles.magicLinkBold}>"Sign in"</Text> to continue.
-              </Text>
-              <Text style={styles.magicLinkSub}>
-                The link expires in 1 hour.
-              </Text>
+ 
+            <View style={styles.otpRow}>
+              {otp.map((digit, i) => (
+                <TextInput
+                  key={i}
+                  ref={ref => { otpRefs.current[i] = ref; }}
+                  style={[
+                    styles.otpBox,
+                    digit ? styles.otpBoxFilled : null,
+                    error ? styles.otpBoxError : null,
+                  ]}
+                  value={digit}
+                  onChangeText={v => handleOTPChange(v, i)}
+                  onKeyPress={({ nativeEvent }) => handleOTPKeyPress(nativeEvent.key, i)}
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  autoFocus={i === 0}
+                  selectTextOnFocus
+                />
+              ))}
             </View>
-
+ 
             {error ? <Text style={styles.error}>{error}</Text> : null}
-
+            {loading && <Text style={styles.verifying}>Verifying…</Text>}
+ 
             <TouchableOpacity
               onPress={handleSendOTP}
               style={styles.resendBtn}
               activeOpacity={0.6}
             >
-              <Text style={styles.resendText}>Resend link</Text>
+              <Text style={styles.resendText}>Resend code</Text>
             </TouchableOpacity>
-
+ 
             <TouchableOpacity
-              onPress={() => { setStep('email'); }}
+              onPress={() => { setStep('email'); setOtp(['', '', '', '', '', '']); }}
               style={styles.resendBtn}
               activeOpacity={0.6}
             >
@@ -201,7 +210,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack 
     </KeyboardAvoidingView>
   );
 };
-
+ 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -302,32 +311,6 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: spacing.sm,
   },
-  magicLinkCard: {
-    backgroundColor: colors.offWhite,
-    borderRadius: 16,
-    padding: spacing.xl,
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.xl,
-  },
-  magicLinkIcon: {
-    fontSize: 36,
-  },
-  magicLinkText: {
-    fontSize: 16,
-    color: colors.black,
-    textAlign: 'center',
-    lineHeight: 24,
-    letterSpacing: -0.2,
-  },
-  magicLinkBold: {
-    fontWeight: '700',
-  },
-  magicLinkSub: {
-    fontSize: 13,
-    color: colors.gray400,
-    textAlign: 'center',
-  },
   resendBtn: {
     marginTop: spacing.md,
     alignItems: 'center',
@@ -338,3 +321,4 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
 });
+ 
