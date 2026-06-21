@@ -11,6 +11,7 @@ import {
   Animated,
 } from 'react-native';
 import { colors, spacing, radius } from '../theme';
+import { signInWithOTP, verifyOTP } from '../lib/supabase';
 import { Button } from '../components/Button';
 
 type AuthStep = 'email' | 'otp';
@@ -23,7 +24,7 @@ interface AuthScreenProps {
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack }) => {
   const [step, setStep] = useState<AuthStep>('email');
   const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState(['', '', '', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -40,9 +41,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack 
     setError('');
     setLoading(true);
 
-    // TODO: wire to Supabase auth
-    await new Promise(r => setTimeout(r, 1000));
+    const { error } = await signInWithOTP(email);
     setLoading(false);
+
+    if (error) {
+      setError('Could not send code. Try again.');
+      return;
+    }
 
     // Animate to OTP step
     Animated.timing(slideAnim, {
@@ -67,11 +72,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack 
     setOtp(newOtp);
     setError('');
 
-    if (value && index < 5) {
+    if (value && index < 7) {
       otpRefs.current[index + 1]?.focus();
     }
 
-    // Auto-verify when all 6 digits filled
+    // Auto-verify when all 8 digits filled
     if (newOtp.every(d => d !== '') && value !== '') {
       handleVerifyOTP(newOtp.join(''));
     }
@@ -87,17 +92,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack 
     setLoading(true);
     setError('');
 
-    // TODO: wire to Supabase auth verification
-    await new Promise(r => setTimeout(r, 1000));
+    const { data, error } = await verifyOTP(email, code);
     setLoading(false);
 
-    if (code === '000000') {
-      // Dev bypass
-      onAuthenticated();
-    } else {
-      onAuthenticated(); // Remove this line when Supabase is wired
-      // setError('Incorrect code. Try again.');
+    if (error || !data?.user) {
+      setError('Incorrect code. Try again.');
+      setOtp(['', '', '', '', '', '']);
+      otpRefs.current[0]?.focus();
+      return;
     }
+
+    onAuthenticated();
   };
 
   const translateX = slideAnim.interpolate({
