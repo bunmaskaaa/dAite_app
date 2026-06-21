@@ -6,7 +6,7 @@ import { AuthScreen } from './src/screens/AuthScreen';
 import { OnboardingScreen, UserProfile } from './src/screens/OnboardingScreen';
 import { MatchFeedScreen, Match } from './src/screens/MatchFeedScreen';
 import { MatchDetailScreen } from './src/screens/MatchDetailScreen';
-import { supabase, upsertProfile, getProfile, getCurrentUser } from './src/lib/supabase';
+import { supabase, upsertProfile, getProfile, getCurrentUser, embedProfile } from './src/lib/supabase';
 import { colors } from './src/theme';
 
 type AppScreen = 'splash' | 'welcome' | 'auth' | 'onboarding' | 'feed' | 'match_detail';
@@ -64,6 +64,8 @@ export default function App() {
         dealbreaker: profile.responses.find(r => r.question === 'Dealbreaker')?.answer || '',
         onboarding_complete: true,
       });
+      // Generate semantic embedding for matching
+      await embedProfile(user.id);
     }
     setScreen('feed');
   };

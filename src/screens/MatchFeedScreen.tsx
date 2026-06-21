@@ -12,6 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { colors, spacing, radius } from '../theme';
+import { fetchMatches, getCurrentUser } from '../lib/supabase';
 import { UserProfile } from './OnboardingScreen';
 
 const { width } = Dimensions.get('window');
@@ -212,13 +213,31 @@ export const MatchFeedScreen: React.FC<MatchFeedScreenProps> = ({
   const listOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Simulate API call to match engine
     const load = async () => {
+      try {
+        // Try real backend first
+        const user = await getCurrentUser();
+        if (user) {
+          const realMatches = await fetchMatches(user.id);
+          if (realMatches && realMatches.length > 0) {
+            setMatches(realMatches);
+            setLoading(false);
+            Animated.stagger(150, [
+              Animated.timing(headerOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+              Animated.timing(listOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+            ]).start();
+            return;
+          }
+        }
+      } catch (e) {
+        console.log('Backend unavailable, using mock data');
+      }
+
+      // Fallback to mock data
       await new Promise(r => setTimeout(r, 1800));
       const mockMatches = generateMockMatches(userProfile);
       setMatches(mockMatches);
       setLoading(false);
-
       Animated.stagger(150, [
         Animated.timing(headerOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
         Animated.timing(listOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),

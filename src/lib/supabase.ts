@@ -15,10 +15,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 export const signInWithOTP = async (email: string) => {
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: {
-      shouldCreateUser: true,
-      channel: 'email' as any,
-    },
+    options: { shouldCreateUser: true },
   });
   return { error };
 };
@@ -95,4 +92,29 @@ export const sendIntroduction = async (
     .select()
     .single();
   return { data, error };
+};
+
+export const BACKEND_URL = 'https://daite-backend.onrender.com';
+
+export const fetchMatches = async (userId: string) => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/match/${userId}`);
+    const data = await response.json();
+    return data.matches || [];
+  } catch (error) {
+    console.error('Match fetch error:', error);
+    return [];
+  }
+};
+
+export const embedProfile = async (userId: string) => {
+  try {
+    await fetch(`${BACKEND_URL}/match/embed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId }),
+    });
+  } catch (error) {
+    console.error('Embed error:', error);
+  }
 };

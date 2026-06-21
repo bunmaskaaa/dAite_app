@@ -24,7 +24,7 @@ interface AuthScreenProps {
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack }) => {
   const [step, setStep] = useState<AuthStep>('email');
   const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '', '', '', '', '']);
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -72,11 +72,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack 
     setOtp(newOtp);
     setError('');
 
-    if (value && index < 7) {
+    if (value && index < 5) {
       otpRefs.current[index + 1]?.focus();
     }
 
-    // Auto-verify when all 8 digits filled
+    // Auto-verify when all 6 digits filled
     if (newOtp.every(d => d !== '') && value !== '') {
       handleVerifyOTP(newOtp.join(''));
     }
@@ -164,35 +164,32 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated, onBack 
             <Text style={styles.eyebrow}>Step 2 of 2</Text>
             <Text style={styles.heading}>Check your inbox</Text>
             <Text style={styles.subtext}>
-              We sent a 6-digit code to{'\n'}
+              We sent a sign-in link to{'\n'}
               <Text style={styles.emailHighlight}>{email}</Text>
             </Text>
 
-            <View style={styles.otpRow}>
-              {otp.map((digit, i) => (
-                <TextInput
-                  key={i}
-                  ref={ref => { otpRefs.current[i] = ref; }}
-                  style={[styles.otpBox, digit ? styles.otpBoxFilled : null, error ? styles.otpBoxError : null]}
-                  value={digit}
-                  onChangeText={v => handleOTPChange(v, i)}
-                  onKeyPress={({ nativeEvent }) => handleOTPKeyPress(nativeEvent.key, i)}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  autoFocus={i === 0}
-                  selectTextOnFocus
-                />
-              ))}
+            <View style={styles.magicLinkCard}>
+              <Text style={styles.magicLinkIcon}>✉️</Text>
+              <Text style={styles.magicLinkText}>
+                Open the email and tap{'\n'}<Text style={styles.magicLinkBold}>"Sign in"</Text> to continue.
+              </Text>
+              <Text style={styles.magicLinkSub}>
+                The link expires in 1 hour.
+              </Text>
             </View>
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
-            {loading && (
-              <Text style={styles.verifying}>Verifying…</Text>
-            )}
+            <TouchableOpacity
+              onPress={handleSendOTP}
+              style={styles.resendBtn}
+              activeOpacity={0.6}
+            >
+              <Text style={styles.resendText}>Resend link</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => { setStep('email'); setOtp(['', '', '', '', '', '']); }}
+              onPress={() => { setStep('email'); }}
               style={styles.resendBtn}
               activeOpacity={0.6}
             >
@@ -305,8 +302,34 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: spacing.sm,
   },
+  magicLinkCard: {
+    backgroundColor: colors.offWhite,
+    borderRadius: 16,
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  magicLinkIcon: {
+    fontSize: 36,
+  },
+  magicLinkText: {
+    fontSize: 16,
+    color: colors.black,
+    textAlign: 'center',
+    lineHeight: 24,
+    letterSpacing: -0.2,
+  },
+  magicLinkBold: {
+    fontWeight: '700',
+  },
+  magicLinkSub: {
+    fontSize: 13,
+    color: colors.gray400,
+    textAlign: 'center',
+  },
   resendBtn: {
-    marginTop: spacing.xl,
+    marginTop: spacing.md,
     alignItems: 'center',
   },
   resendText: {
