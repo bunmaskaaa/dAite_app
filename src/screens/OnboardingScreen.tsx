@@ -1,26 +1,52 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  TextInput,
   TouchableOpacity,
   ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  StyleSheet,
+  SafeAreaView,
   Animated,
-  StatusBar,
   Dimensions,
 } from 'react-native';
-import { colors, spacing, radius } from '../theme';
 
-const { height } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-interface Message {
-  id: string;
-  role: 'agent' | 'user';
-  text: string;
-  timestamp: Date;
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface UserProfile {
+  // Basics
+  name: string;
+  age: string;
+  gender: string;
+  industry: string;
+  // Intent
+  intent: string[];
+  // Personality
+  vibe: string;
+  energy: string;
+  humor: string;
+  decisionStyle: string;
+  // Lifestyle
+  sundayPace: string;
+  lifeChapter: string;
+  interests: string[];
+  hangoutStyle: string;
+  // Social
+  communicationStyle: string;
+  socialBattery: string;
+  cancelReason: string;
+  socialRole: string;
+  // Values
+  conflictStyle: string;
+  valuesInOthers: string[];
+  selfTraits: string[];
+  // Legacy fields kept for App.tsx compatibility
+  orientation: string;
+  ageRangeMin: string;
+  ageRangeMax: string;
+  matchPhilosophy: 'similar' | 'opposites';
+  responses: { question: string; answer: string }[];
 }
 
 interface OnboardingScreenProps {
@@ -28,517 +54,645 @@ interface OnboardingScreenProps {
   onBack: () => void;
 }
 
-export interface UserProfile {
-  name: string;
-  age: string;
-  gender: string;
-  orientation: string;
-  ageRangeMin: string;
-  ageRangeMax: string;
-  matchPhilosophy: 'opposites' | 'similar' | '';
-  responses: { question: string; answer: string }[];
+// ─── Question definitions ──────────────────────────────────────────────────────
+
+type QuestionType = 'single' | 'multi' | 'grid';
+
+interface Question {
+  id: keyof UserProfile | string;
+  section: string;
+  question: string;
+  sub?: string;
+  type: QuestionType;
+  max?: number;
+  options: { label: string; emoji: string }[];
 }
 
-// The system prompt that makes dAite's agent feel warm and intentional
-const SYSTEM_PROMPT = `You are dAite's matchmaker — a warm, perceptive, and direct AI that helps people find genuine romantic connections in Mumbai. Your job is to understand who this person truly is, not just their stats.
+const QUESTIONS: Question[] = [
+  {
+    id: 'age',
+    section: 'Basics',
+    question: 'How old are you?',
+    type: 'grid',
+    options: [
+      { emoji: '🌱', label: '18 – 24' },
+      { emoji: '⚡', label: '25 – 29' },
+      { emoji: '🔥', label: '30 – 35' },
+      { emoji: '✨', label: '36 – 45' },
+    ],
+  },
+  {
+    id: 'gender',
+    section: 'Basics',
+    question: 'How do you identify?',
+    type: 'single',
+    options: [
+      { emoji: '👨', label: 'Man' },
+      { emoji: '👩', label: 'Woman' },
+      { emoji: '🌈', label: 'Non-binary' },
+      { emoji: '🤫', label: 'Prefer not to say' },
+    ],
+  },
+  {
+    id: 'industry',
+    section: 'Basics',
+    question: 'What do you do for work?',
+    type: 'single',
+    options: [
+      { emoji: '💻', label: 'Tech & startups' },
+      { emoji: '💰', label: 'Finance & banking' },
+      { emoji: '🎨', label: 'Creative & media' },
+      { emoji: '🏥', label: 'Healthcare' },
+      { emoji: '🎓', label: 'Education & research' },
+      { emoji: '🏗️', label: 'Other' },
+    ],
+  },
+  {
+    id: 'intent',
+    section: 'Intent',
+    question: 'What brings you to dAite?',
+    sub: 'Select up to 2',
+    type: 'multi',
+    max: 2,
+    options: [
+      { emoji: '👫', label: 'Meet new people' },
+      { emoji: '💬', label: 'Meaningful conversations' },
+      { emoji: '💘', label: 'Meet someone special' },
+      { emoji: '🌆', label: 'Explore Mumbai more' },
+      { emoji: '🆕', label: 'Just moved here' },
+    ],
+  },
+  {
+    id: 'vibe',
+    section: 'Personality',
+    question: 'Your vibe in one word?',
+    type: 'single',
+    options: [
+      { emoji: '🏃', label: 'Hustler' },
+      { emoji: '🧭', label: 'Explorer' },
+      { emoji: '🦋', label: 'Social butterfly' },
+      { emoji: '🌊', label: 'Chill' },
+    ],
+  },
+  {
+    id: 'energy',
+    section: 'Personality',
+    question: 'Are you more...',
+    type: 'single',
+    options: [
+      { emoji: '📚', label: 'Introverted — recharge alone' },
+      { emoji: '🌗', label: 'Ambivert — bit of both' },
+      { emoji: '🎉', label: 'Extroverted — energized by people' },
+    ],
+  },
+  {
+    id: 'humor',
+    section: 'Personality',
+    question: 'Your humor style?',
+    type: 'single',
+    options: [
+      { emoji: '😅', label: 'Self-deprecating' },
+      { emoji: '🪨', label: 'Deadpan / dry' },
+      { emoji: '🌀', label: 'Absurd / random' },
+      { emoji: '🎭', label: 'Situational — I read the room' },
+    ],
+  },
+  {
+    id: 'decisionStyle',
+    section: 'Personality',
+    question: 'Your opinions are usually guided by...',
+    type: 'single',
+    options: [
+      { emoji: '🔍', label: 'Logic & facts' },
+      { emoji: '💗', label: 'Emotions & feelings' },
+      { emoji: '🤹', label: 'Mix, depends on the mood' },
+    ],
+  },
+  {
+    id: 'sundayPace',
+    section: 'Lifestyle',
+    question: 'Your typical Sunday looks like...',
+    type: 'single',
+    options: [
+      { emoji: '📋', label: 'Planned out & productive' },
+      { emoji: '🌅', label: 'Slow start, spontaneous by evening' },
+      { emoji: '🌊', label: 'Completely unstructured' },
+      { emoji: '📅', label: 'Depends on the week' },
+    ],
+  },
+  {
+    id: 'lifeChapter',
+    section: 'Lifestyle',
+    question: 'Which life chapter are you in?',
+    type: 'single',
+    options: [
+      { emoji: '🏗️', label: 'Building hard — head down, big goals' },
+      { emoji: '⚖️', label: 'Finding balance — work + living well' },
+      { emoji: '🧭', label: 'Exploring — figuring things out' },
+      { emoji: '😌', label: 'Coasting — happy where I am' },
+    ],
+  },
+  {
+    id: 'interests',
+    section: 'Lifestyle',
+    question: 'What do you enjoy in your free time?',
+    sub: 'Select up to 4',
+    type: 'multi',
+    max: 4,
+    options: [
+      { emoji: '☕', label: 'Tapri chai runs' },
+      { emoji: '🌊', label: 'Marine Drive walks' },
+      { emoji: '🎵', label: 'Live music & gigs' },
+      { emoji: '💪', label: 'Gym & fitness' },
+      { emoji: '🍵', label: 'Café hopping' },
+      { emoji: '📚', label: 'Reading' },
+      { emoji: '🎨', label: 'Art & design' },
+      { emoji: '🎮', label: 'Gaming' },
+      { emoji: '✈️', label: 'Traveling' },
+      { emoji: '🍜', label: 'Food spotting' },
+      { emoji: '📸', label: 'Photography' },
+      { emoji: '🧘', label: 'Yoga / meditation' },
+    ],
+  },
+  {
+    id: 'hangoutStyle',
+    section: 'Lifestyle',
+    question: 'Your ideal Mumbai hangout?',
+    type: 'single',
+    options: [
+      { emoji: '🌅', label: 'Juhu beach at 6am' },
+      { emoji: '🥂', label: 'Bandra brunch spot' },
+      { emoji: '🎵', label: 'Underground gig in Lower Parel' },
+      { emoji: '🍵', label: 'Irani café, old books, no plan' },
+    ],
+  },
+  {
+    id: 'communicationStyle',
+    section: 'Social',
+    question: 'How do you keep in touch with people you like?',
+    type: 'single',
+    options: [
+      { emoji: '🎙️', label: 'Voice notes / calls' },
+      { emoji: '💬', label: 'Texts — quick and frequent' },
+      { emoji: '😂', label: 'Memes and reels' },
+      { emoji: '🦇', label: 'Go MIA but show up fully' },
+    ],
+  },
+  {
+    id: 'socialBattery',
+    section: 'Social',
+    question: 'After a big social event, you need...',
+    type: 'single',
+    options: [
+      { emoji: '🎊', label: 'More plans — just getting started' },
+      { emoji: '🛋️', label: 'One quiet day to reset' },
+      { emoji: '🐢', label: 'A few days of hermit mode' },
+      { emoji: '🎲', label: 'Depends on the people' },
+    ],
+  },
+  {
+    id: 'cancelReason',
+    section: 'Social',
+    question: "You'd cancel plans if...",
+    type: 'single',
+    options: [
+      { emoji: '👨‍👩‍👧', label: 'A family member needs you' },
+      { emoji: '😶', label: "You're just not feeling it" },
+      { emoji: '💼', label: 'Work demands it' },
+      { emoji: '🔒', label: "Honestly, you rarely cancel" },
+    ],
+  },
+  {
+    id: 'socialRole',
+    section: 'Social',
+    question: 'Friends call you when...',
+    type: 'single',
+    options: [
+      { emoji: '🧠', label: 'They need honest advice' },
+      { emoji: '😂', label: 'They want to laugh and vent' },
+      { emoji: '🔧', label: 'They need help figuring something out' },
+      { emoji: '🫂', label: 'They just want good company' },
+    ],
+  },
+  {
+    id: 'conflictStyle',
+    section: 'Values',
+    question: 'When something bothers you, you...',
+    type: 'single',
+    options: [
+      { emoji: '💬', label: 'Say it directly' },
+      { emoji: '🤌', label: 'Hint at it and hope they get it' },
+      { emoji: '🧘', label: 'Process alone first, then talk' },
+      { emoji: '🫥', label: "Avoid it unless it's serious" },
+    ],
+  },
+  {
+    id: 'valuesInOthers',
+    section: 'Values',
+    question: 'Qualities you value most in people?',
+    sub: 'Select up to 3',
+    type: 'multi',
+    max: 3,
+    options: [
+      { emoji: '✨', label: 'Authentic' },
+      { emoji: '👂', label: 'Attentive' },
+      { emoji: '⚡', label: 'Charismatic' },
+      { emoji: '🌿', label: 'Grounded' },
+      { emoji: '😄', label: 'Funny' },
+      { emoji: '🧠', label: 'Intelligent' },
+      { emoji: '🔥', label: 'Warm' },
+      { emoji: '🌈', label: 'Optimistic' },
+      { emoji: '🎯', label: 'Driven' },
+      { emoji: '🕊️', label: 'Calm' },
+    ],
+  },
+  {
+    id: 'selfTraits',
+    section: 'Values',
+    question: 'What do your friends love about you?',
+    sub: 'Select up to 3',
+    type: 'multi',
+    max: 3,
+    options: [
+      { emoji: '✨', label: 'Authentic' },
+      { emoji: '👂', label: 'Attentive' },
+      { emoji: '⚡', label: 'Charismatic' },
+      { emoji: '🌿', label: 'Grounded' },
+      { emoji: '😄', label: 'Funny' },
+      { emoji: '🧠', label: 'Intelligent' },
+      { emoji: '🔥', label: 'Warm' },
+      { emoji: '🌈', label: 'Optimistic' },
+      { emoji: '🎯', label: 'Driven' },
+      { emoji: '🕊️', label: 'Calm' },
+    ],
+  },
+];
 
-You are conducting a structured onboarding conversation to build their profile. Follow this exact sequence:
+const TOTAL = QUESTIONS.length;
 
-1. Ask for their first name warmly.
-2. Ask their age.
-3. Ask their gender — keep it open and relaxed. Example: "How do you identify — man, woman, or something else?"
-4. Ask who they want to meet — men, women, or open to both. Keep it casual and non-judgmental.
-5. Ask what age range they're open to. Example: "What age range are you open to? Like 24 to 32, or something wider?"
-6. Ask which philosophy they believe in — keep it fun and light. Example: "Quick one — do you believe opposites attract, or that similar people make better matches?"
-7. Ask what they're looking for — long-term relationship, something serious but open, not sure yet.
-8. Ask one revealing personality question. Example: "What does a perfect Sunday look like for you?"
-9. Ask what they genuinely value in a partner — character, not looks. Push for specifics.
-10. Ask one dealbreaker — what's a non-negotiable.
-11. Give a brief warm closing summary referencing their philosophy choice, and tell them dAite will now find their best matches.
+// ─── Component ────────────────────────────────────────────────────────────────
 
-Rules:
-- Ask ONE question at a time. Never bundle multiple questions.
-- Keep responses short — 1-3 sentences max.
-- Be conversational, warm, and occasionally witty. Not corporate.
-- Never use bullet points or numbered lists.
-- When you have all 10 pieces of information, end with: [PROFILE_COMPLETE] on a new line, followed by a JSON object with keys: name, age, gender, orientation, age_range_min, age_range_max, match_philosophy (value must be exactly "opposites" or "similar"), looking_for, personality_snapshot, partner_values, dealbreaker.
-- Do not mention AI, Claude, or Anthropic.`;
+export function OnboardingScreen({ onComplete, onBack }: OnboardingScreenProps) {
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-// TODO: move to env / backend — never expose in production
-const API_KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY || '';
+  const q = QUESTIONS[step];
+  const current = answers[q.id];
+  const isMulti = q.type === 'multi';
+  const selectedArr: string[] = isMulti ? (current as string[] ?? []) : [];
+  const selectedSingle: string = !isMulti ? (current as string ?? '') : '';
+  const hasAnswer = isMulti ? selectedArr.length > 0 : !!selectedSingle;
 
-export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
-  onComplete,
-  onBack,
-}) => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0); // 0-6 steps
-  const [inputEnabled, setInputEnabled] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
-  const inputRef = useRef<TextInput>(null);
-  const typingOpacity = useRef(new Animated.Value(0)).current;
-  const conversationHistory = useRef<{ role: string; content: string }[]>([]);
-
-  useEffect(() => {
-    // Start the conversation
-    startConversation();
-  }, []);
-
-  useEffect(() => {
-    // Scroll to bottom on new message
-    setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  }, [messages]);
-
-  const animateTyping = () => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(typingOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
-        Animated.timing(typingOpacity, { toValue: 0.3, duration: 400, useNativeDriver: true }),
-      ])
-    ).start();
-  };
-
-  const stopTyping = () => {
-    typingOpacity.stopAnimation();
-    typingOpacity.setValue(0);
-  };
-
-  const startConversation = async () => {
-    setLoading(true);
-    animateTyping();
-
-    // Small delay to feel natural
-    await new Promise(r => setTimeout(r, 800));
-
-    const openingMessage = "Hey — I'm your dAite matchmaker. I'll ask you a few questions to find people who are genuinely right for you. This takes about 2 minutes.\n\nLet's start simple — what's your first name?";
-
-    stopTyping();
-    addAgentMessage(openingMessage);
-    setLoading(false);
-    setInputEnabled(true);
-
-    conversationHistory.current.push({
-      role: 'assistant',
-      content: openingMessage,
+  const animateTransition = (callback: () => void) => {
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start(() => {
+      callback();
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
     });
   };
 
-  const addAgentMessage = (text: string) => {
-    const msg: Message = {
-      id: Date.now().toString(),
-      role: 'agent',
-      text,
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, msg]);
+  const handleSingle = (label: string) => {
+    setAnswers(prev => ({ ...prev, [q.id]: label }));
   };
 
-  const addUserMessage = (text: string) => {
-    const msg: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      text,
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, msg]);
-  };
-
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
-
-    const userText = input.trim();
-    setInput('');
-    setInputEnabled(false);
-    addUserMessage(userText);
-
-    conversationHistory.current.push({
-      role: 'user',
-      content: userText,
-    });
-
-    setLoading(true);
-    animateTyping();
-
-    try {
-      const response = await fetch(ANTHROPIC_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': API_KEY,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 400,
-          system: SYSTEM_PROMPT,
-          messages: conversationHistory.current,
-        }),
-      });
-
-      const data = await response.json();
-      const agentText: string = data.content?.[0]?.text || "Sorry, I didn't catch that. Can you try again?";
-
-      stopTyping();
-
-      // Check if profile is complete
-      if (agentText.includes('[PROFILE_COMPLETE]')) {
-        const parts = agentText.split('[PROFILE_COMPLETE]');
-        const displayText = parts[0].trim();
-
-        if (displayText) {
-          addAgentMessage(displayText);
-        }
-
-        conversationHistory.current.push({
-          role: 'assistant',
-          content: agentText,
-        });
-
-        setProgress(6);
-
-        // Extract JSON profile
-        try {
-          const jsonMatch = parts[1]?.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const profileData = JSON.parse(jsonMatch[0]);
-            setTimeout(() => {
-              onComplete({
-                name: profileData.name || '',
-                age: profileData.age || '',
-                gender: profileData.gender || '',
-                orientation: profileData.orientation || '',
-                ageRangeMin: profileData.age_range_min || '18',
-                ageRangeMax: profileData.age_range_max || '40',
-                matchPhilosophy: profileData.match_philosophy === 'opposites' ? 'opposites' : 'similar',
-                responses: [
-                  { question: 'Looking for', answer: profileData.looking_for || '' },
-                  { question: 'Personality', answer: profileData.personality_snapshot || '' },
-                  { question: 'Partner values', answer: profileData.partner_values || '' },
-                  { question: 'Dealbreaker', answer: profileData.dealbreaker || '' },
-                ],
-              });
-            }, 2000);
-          }
-        } catch {
-          setTimeout(() => onComplete({ name: '', age: '', gender: '', orientation: '', ageRangeMin: '18', ageRangeMax: '40', matchPhilosophy: '', responses: [] }), 2000);
-        }
-      } else {
-        addAgentMessage(agentText);
-        conversationHistory.current.push({
-          role: 'assistant',
-          content: agentText,
-        });
-        setProgress(prev => Math.min(prev + 1, 5));
-        setInputEnabled(true);
-        setLoading(false);
-        setTimeout(() => inputRef.current?.focus(), 300);
-      }
-    } catch {
-      stopTyping();
-      addAgentMessage("Something went wrong. Let's try that again.");
-      setInputEnabled(true);
-      setLoading(false);
+  const handleMulti = (label: string) => {
+    const prev = (answers[q.id] as string[] ?? []);
+    if (prev.includes(label)) {
+      setAnswers(a => ({ ...a, [q.id]: prev.filter(x => x !== label) }));
+    } else if (prev.length < (q.max ?? 99)) {
+      setAnswers(a => ({ ...a, [q.id]: [...prev, label] }));
     }
   };
 
-  const progressWidth = `${(progress / 6) * 100}%`;
+  const goNext = () => {
+    if (!hasAnswer) return;
+    if (step < TOTAL - 1) {
+      animateTransition(() => setStep(s => s + 1));
+    } else {
+      handleFinish();
+    }
+  };
+
+  const goBack = () => {
+    if (step === 0) {
+      onBack();
+    } else {
+      animateTransition(() => setStep(s => s - 1));
+    }
+  };
+
+  const handleFinish = () => {
+    const a = answers as any;
+    const profile: UserProfile = {
+      name: '',
+      age: a.age ?? '',
+      gender: a.gender ?? '',
+      industry: a.industry ?? '',
+      intent: a.intent ?? [],
+      vibe: a.vibe ?? '',
+      energy: a.energy ?? '',
+      humor: a.humor ?? '',
+      decisionStyle: a.decisionStyle ?? '',
+      sundayPace: a.sundayPace ?? '',
+      lifeChapter: a.lifeChapter ?? '',
+      interests: a.interests ?? [],
+      hangoutStyle: a.hangoutStyle ?? '',
+      communicationStyle: a.communicationStyle ?? '',
+      socialBattery: a.socialBattery ?? '',
+      cancelReason: a.cancelReason ?? '',
+      socialRole: a.socialRole ?? '',
+      conflictStyle: a.conflictStyle ?? '',
+      valuesInOthers: a.valuesInOthers ?? [],
+      selfTraits: a.selfTraits ?? [],
+      // Legacy compatibility
+      orientation: '',
+      ageRangeMin: '18',
+      ageRangeMax: '45',
+      matchPhilosophy: 'similar',
+      responses: [
+        { question: 'Looking for', answer: (a.intent ?? []).join(', ') },
+        { question: 'Personality', answer: `${a.vibe}, ${a.energy}, ${a.humor}` },
+        { question: 'Partner values', answer: (a.valuesInOthers ?? []).join(', ') },
+        { question: 'Dealbreaker', answer: '' },
+      ],
+    };
+    onComplete(profile);
+  };
+
+  const progress = ((step + 1) / TOTAL) * 100;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
-      <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
-
+    <SafeAreaView style={styles.safe}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} activeOpacity={0.6} style={styles.backBtn}>
+        <TouchableOpacity onPress={goBack} style={styles.backBtn}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>dAite</Text>
-          <Text style={styles.headerSub}>your matchmaker</Text>
-        </View>
-        <View style={styles.headerRight} />
+        <Text style={styles.logo}>dAite</Text>
+        <Text style={styles.counter}>{step + 1} / {TOTAL}</Text>
       </View>
 
-      {/* Progress bar */}
+      {/* Progress */}
       <View style={styles.progressTrack}>
-        <Animated.View style={[styles.progressFill, { width: progressWidth as any }]} />
+        <View style={[styles.progressFill, { width: `${progress}%` }]} />
       </View>
 
-      {/* Messages */}
-      <ScrollView
-        ref={scrollRef}
-        style={styles.messageList}
-        contentContainerStyle={styles.messageListContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {messages.map(msg => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
+      {/* Question content */}
+      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+        <Text style={styles.sectionLabel}>{q.section}</Text>
+        <Text style={styles.questionText}>{q.question}</Text>
+        {q.sub ? <Text style={styles.subText}>{q.sub}</Text> : null}
 
-        {/* Typing indicator */}
-        {loading && (
-          <View style={styles.agentBubbleWrap}>
-            <View style={styles.agentAvatar}>
-              <Text style={styles.agentAvatarText}>d</Text>
-            </View>
-            <Animated.View style={[styles.typingBubble, { opacity: typingOpacity }]}>
-              <Text style={styles.typingDots}>● ● ●</Text>
-            </Animated.View>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Input area */}
-      <View style={styles.inputArea}>
-        <TextInput
-          ref={inputRef}
-          style={[styles.input, !inputEnabled && styles.inputDisabled]}
-          placeholder={inputEnabled ? "Type your answer…" : ""}
-          placeholderTextColor={colors.gray400}
-          value={input}
-          onChangeText={setInput}
-          editable={inputEnabled}
-          multiline
-          maxLength={300}
-          returnKeyType="send"
-          onSubmitEditing={sendMessage}
-          blurOnSubmit={false}
-        />
-        <TouchableOpacity
-          onPress={sendMessage}
-          disabled={!input.trim() || loading || !inputEnabled}
-          activeOpacity={0.7}
-          style={[
-            styles.sendBtn,
-            (!input.trim() || loading || !inputEnabled) && styles.sendBtnDisabled,
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            q.type === 'grid' ? styles.gridContainer :
+            q.type === 'multi' && q.options.length > 6 ? styles.tagContainer :
+            styles.listContainer
           ]}
         >
-          <Text style={styles.sendIcon}>↑</Text>
+          {q.options.map(opt => {
+            const isSelected = isMulti
+              ? selectedArr.includes(opt.label)
+              : selectedSingle === opt.label;
+
+            if (q.type === 'grid') {
+              return (
+                <TouchableOpacity
+                  key={opt.label}
+                  style={[styles.gridOption, isSelected && styles.selectedOption]}
+                  onPress={() => handleSingle(opt.label)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.gridEmoji}>{opt.emoji}</Text>
+                  <Text style={[styles.gridLabel, isSelected && styles.selectedText]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }
+
+            if (q.type === 'multi' && q.options.length > 6) {
+              return (
+                <TouchableOpacity
+                  key={opt.label}
+                  style={[styles.tag, isSelected && styles.selectedOption]}
+                  onPress={() => handleMulti(opt.label)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.tagText, isSelected && styles.selectedText]}>
+                    {opt.emoji} {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }
+
+            return (
+              <TouchableOpacity
+                key={opt.label}
+                style={[styles.listOption, isSelected && styles.selectedOption]}
+                onPress={() => isMulti ? handleMulti(opt.label) : handleSingle(opt.label)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.optionEmoji}>{opt.emoji}</Text>
+                <Text style={[styles.optionLabel, isSelected && styles.selectedText]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </Animated.View>
+
+      {/* Footer nav */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.continueBtn, !hasAnswer && styles.continueBtnDisabled]}
+          onPress={goNext}
+          disabled={!hasAnswer}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.continueBtnText}>
+            {step === TOTAL - 1 ? 'Find my matches' : 'Continue'}
+          </Text>
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
-};
+}
 
-const MessageBubble: React.FC<{ message: Message }> = ({ message }) => {
-  const isAgent = message.role === 'agent';
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(8)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-    ]).start();
-  }, []);
-
-  if (isAgent) {
-    return (
-      <Animated.View
-        style={[
-          styles.agentBubbleWrap,
-          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-        ]}
-      >
-        <View style={styles.agentAvatar}>
-          <Text style={styles.agentAvatarText}>d</Text>
-        </View>
-        <View style={styles.agentBubble}>
-          <Text style={styles.agentText}>{message.text}</Text>
-        </View>
-      </Animated.View>
-    );
-  }
-
-  return (
-    <Animated.View
-      style={[
-        styles.userBubbleWrap,
-        { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-      ]}
-    >
-      <View style={styles.userBubble}>
-        <Text style={styles.userText}>{message.text}</Text>
-      </View>
-    </Animated.View>
-  );
-};
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: '#FAF9F6',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 56,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.white,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   backBtn: {
-    width: 40,
+    padding: 4,
+    minWidth: 32,
   },
   backText: {
-    fontSize: 22,
-    color: colors.black,
+    fontSize: 20,
+    color: '#888',
   },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
+  logo: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#1a1a1a',
+    letterSpacing: -0.3,
   },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.black,
-    letterSpacing: -0.5,
-  },
-  headerSub: {
-    fontSize: 11,
-    color: colors.gray400,
-    letterSpacing: 0.5,
-    marginTop: 1,
-  },
-  headerRight: {
-    width: 40,
+  counter: {
+    fontSize: 12,
+    color: '#bbb',
+    fontWeight: '500',
+    minWidth: 32,
+    textAlign: 'right',
   },
   progressTrack: {
-    height: 2,
-    backgroundColor: colors.gray100,
-    marginHorizontal: spacing.lg,
+    height: 3,
+    backgroundColor: '#E8E6E0',
+    marginHorizontal: 20,
     borderRadius: 2,
-    marginBottom: spacing.sm,
+    overflow: 'hidden',
   },
   progressFill: {
-    height: 2,
-    backgroundColor: colors.black,
+    height: '100%',
+    backgroundColor: '#1a1a1a',
     borderRadius: 2,
   },
-  messageList: {
+  content: {
     flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
-  messageListContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xl,
-    gap: spacing.md,
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#999',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
   },
-  agentBubbleWrap: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.sm,
-    maxWidth: '85%',
+  questionText: {
+    fontSize: 22,
+    fontWeight: '500',
+    color: '#1a1a1a',
+    lineHeight: 30,
+    marginBottom: 4,
   },
-  agentAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.black,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-  },
-  agentAvatarText: {
+  subText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: colors.white,
-    letterSpacing: -0.5,
+    color: '#aaa',
+    marginBottom: 18,
   },
-  agentBubble: {
-    backgroundColor: colors.offWhite,
-    borderRadius: radius.lg,
-    borderBottomLeftRadius: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 4,
-    flex: 1,
-  },
-  agentText: {
-    fontSize: 15,
-    color: colors.black,
-    lineHeight: 22,
-    letterSpacing: -0.1,
-  },
-  typingBubble: {
-    backgroundColor: colors.offWhite,
-    borderRadius: radius.lg,
-    borderBottomLeftRadius: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 4,
-  },
-  typingDots: {
-    fontSize: 10,
-    color: colors.gray400,
-    letterSpacing: 3,
-  },
-  userBubbleWrap: {
-    alignSelf: 'flex-end',
-    maxWidth: '80%',
-  },
-  userBubble: {
-    backgroundColor: colors.black,
-    borderRadius: radius.lg,
-    borderBottomRightRadius: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 4,
-  },
-  userText: {
-    fontSize: 15,
-    color: colors.white,
-    lineHeight: 22,
-    letterSpacing: -0.1,
-  },
-  inputArea: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: Platform.OS === 'ios' ? 34 : spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray100,
-    backgroundColor: colors.white,
-    gap: spacing.sm,
-  },
-  input: {
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 120,
-    backgroundColor: colors.offWhite,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.md,
+  listContainer: {
     paddingTop: 12,
-    paddingBottom: 12,
-    fontSize: 15,
-    color: colors.black,
-    letterSpacing: -0.1,
+    gap: 8,
   },
-  inputDisabled: {
-    opacity: 0.5,
+  gridContainer: {
+    paddingTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.black,
+  tagContainer: {
+    paddingTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  listOption: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: '#fff',
+    borderWidth: 0.5,
+    borderColor: '#E0DDD6',
+    borderRadius: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
   },
-  sendBtnDisabled: {
-    backgroundColor: colors.gray200,
+  gridOption: {
+    width: (SCREEN_WIDTH - 50) / 2,
+    backgroundColor: '#fff',
+    borderWidth: 0.5,
+    borderColor: '#E0DDD6',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    gap: 8,
   },
-  sendIcon: {
+  tag: {
+    backgroundColor: '#fff',
+    borderWidth: 0.5,
+    borderColor: '#E0DDD6',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  tagText: {
+    fontSize: 13,
+    color: '#1a1a1a',
+  },
+  selectedOption: {
+    backgroundColor: '#1a1a1a',
+    borderColor: '#1a1a1a',
+  },
+  optionEmoji: {
     fontSize: 18,
-    color: colors.white,
-    fontWeight: '600',
+    width: 24,
+    textAlign: 'center',
+  },
+  optionLabel: {
+    fontSize: 14,
+    color: '#1a1a1a',
+    flex: 1,
+  },
+  gridEmoji: {
+    fontSize: 24,
+  },
+  gridLabel: {
+    fontSize: 13,
+    color: '#1a1a1a',
+    fontWeight: '500',
+  },
+  selectedText: {
+    color: '#fff',
+  },
+  footer: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    paddingTop: 12,
+  },
+  continueBtn: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 28,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  continueBtnDisabled: {
+    backgroundColor: '#D0CEC8',
+  },
+  continueBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '500',
   },
 });

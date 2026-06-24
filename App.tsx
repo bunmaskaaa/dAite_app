@@ -45,30 +45,43 @@ export default function App() {
   };
 
   const handleOnboardingComplete = async (profile: UserProfile) => {
-    setUserProfile(profile);
-    const user = await getCurrentUser();
-    if (user) {
-      await upsertProfile({
-        id: user.id,
-        email: user.email || '',
-        name: profile.name,
-        age: parseInt(profile.age, 10) || 0,
-        gender: profile.gender,
-        orientation: profile.orientation,
-        age_range_min: parseInt(profile.ageRangeMin, 10) || 18,
-        age_range_max: parseInt(profile.ageRangeMax, 10) || 40,
-        match_philosophy: profile.matchPhilosophy,
-        looking_for: profile.responses.find(r => r.question === 'Looking for')?.answer || '',
-        personality_snapshot: profile.responses.find(r => r.question === 'Personality')?.answer || '',
-        partner_values: profile.responses.find(r => r.question === 'Partner values')?.answer || '',
-        dealbreaker: profile.responses.find(r => r.question === 'Dealbreaker')?.answer || '',
-        onboarding_complete: true,
-      });
-      // Generate semantic embedding for matching
-      await embedProfile(user.id);
-    }
-    setScreen('feed');
-  };
+  setUserProfile(profile);
+  const user = await getCurrentUser();
+  if (user) {
+    await upsertProfile({
+      id: user.id,
+      email: user.email || '',
+      name: profile.name,
+      age: parseInt(profile.age, 10) || 0,
+      gender: profile.gender,
+      orientation: profile.orientation,
+      age_range_min: parseInt(profile.ageRangeMin, 10) || 18,
+      age_range_max: parseInt(profile.ageRangeMax, 10) || 40,
+      match_philosophy: profile.matchPhilosophy,
+      industry: profile.industry,
+      intent: profile.intent,
+      vibe: profile.vibe,
+      energy: profile.energy,
+      humor: profile.humor,
+      decision_style: profile.decisionStyle,
+      sunday_pace: profile.sundayPace,
+      life_chapter: profile.lifeChapter,
+      interests: profile.interests,
+      hangout_style: profile.hangoutStyle,
+      communication_style: profile.communicationStyle,
+      social_battery: profile.socialBattery,
+      cancel_reason: profile.cancelReason,
+      social_role: profile.socialRole,
+      conflict_style: profile.conflictStyle,
+      values_in_others: profile.valuesInOthers,
+      self_traits: profile.selfTraits,
+      looking_for: profile.responses.find(r => r.question === 'Looking for')?.answer || '',
+      onboarding_complete: true,
+    });
+    await embedProfile(user.id);
+  }
+  setScreen('feed');
+};
 
   const renderScreen = () => {
     switch (screen) {
